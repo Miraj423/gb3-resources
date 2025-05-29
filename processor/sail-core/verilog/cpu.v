@@ -358,6 +358,14 @@ module cpu(
 			.select(id_ex_out[9]),
 			.out(lui_result)
 		);
+	wire gated_exec_clk;
+	clock_gating cg_exec (
+		.clk(clk),
+		.enable(exec_enable),
+		.gated_clk(gated_exec_clk)
+	);
+
+// Use gated_exec_clk to clock execute stage logic
 
 	//EX/MEM Pipeline Register
 	ex_mem ex_mem_reg(
