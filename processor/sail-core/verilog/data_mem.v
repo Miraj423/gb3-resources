@@ -98,12 +98,7 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 	 */
 	reg [3:0]		sign_mask_buf;
 
-	/*
-	 *	Block memory registers
-	 *
-	 *	(Bad practice: The constant for the size should be a `define).
-	 */
-	reg [31:0]		data_block[0:1023];
+
 
 	/*
 	 *	wire assignments
@@ -212,6 +207,17 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 	assign read_buf = (select2) ? out6 : out5;
 
 	/*
+	 *pipelined data RAM (hides two-cycle latency)
+	 */
+	pipelined_data_mem u_piped_dmem (
+  	.clk     (clk),
+  	.addr_in (addr_buf_block_addr - 10'd256), // word index
+  	.we_in   (memwrite_buf),
+  	.din_in  (replacement_word),
+  	.dout_out(word_buf)                       // now holds the read data
+	);
+
+	/*
 	 *	This uses Yosys's support for nonzero initial values:
 	 *
 	 *		https://github.com/YosysHQ/yosys/commit/0793f1b196df536975a044a4ce53025c81d00c7f
@@ -220,10 +226,11 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 	 *	the design should instead use a reset signal going to
 	 *	modules in the design.
 	 */
-	initial begin
-		$readmemh("verilog/data.hex", data_block);
-		clk_stall = 0;
-	end
+
+	/*
+	 *Initialise clock stall 
+	 */ 
+	initial clk_stall = 0;
 
 	/*
 	 *	LED register interfacing with I/O
@@ -258,7 +265,6 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 				 *	Subtract out the size of the instruction memory.
 				 *	(Bad practice: The constant should be a `define).
 				 */
-				word_buf <= data_block[addr_buf_block_addr - 32'h1000];
 				if(memread_buf==1'b1) begin
 					state <= READ;
 				end
@@ -269,7 +275,7 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 
 			READ: begin
 				clk_stall <= 0;
-				read_data <= read_buf;
+				read_data <= word_buf;  // now comes from .dout_out of the pipeline
 				state <= IDLE;
 			end
 
@@ -280,7 +286,6 @@ module data_mem (clk, addr, write_data, memwrite, memread, sign_mask, read_data,
 				 *	Subtract out the size of the instruction memory.
 				 *	(Bad practice: The constant should be a `define).
 				 */
-				data_block[addr_buf_block_addr - 32'h1000] <= replacement_word;
 				state <= IDLE;
 			end
 
